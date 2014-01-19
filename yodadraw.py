@@ -6,6 +6,7 @@ import sys
 import os
 import shutil
 import itertools
+import yoda
 
 class Bin:
 	def __init__(self,values,special=""):
@@ -33,6 +34,12 @@ class Legend:
 		self.color = color
 
 def fetch(filename):
+	if len(filename)<1:
+		print "You did not provide a filename!"
+		return []
+	return yoda.readYODA(filename)
+
+def fetch_plane(filename):
 	if len(filename)<1:
 		print "You did not provide a filename!"
 		return 0
@@ -117,7 +124,8 @@ def getCommandLineOptions():
 						default="", help="Provide (optional) legend file in .xml format")
 	parser.add_option("--make-legend", dest="MAKELEGEND", action="store_true",
 						default=False, help="Make template .xml legend file from .yoda file(s). No plots are produced. ")
-
+	parser.add_option("--no-bind", dest="NOBIND", action="store_true",
+						default=False, help="Set if YODA bindings are not installed. Will try to read the flat file. ")
 	return parser
 
 def makeLegend(filelist,singlehisto=""):
@@ -179,29 +187,30 @@ if opts.MAKELEGEND:
 
 for f in filelist:
 	name = f
-	histograms = fetch(name+'.yoda' if name.find(".yoda")<0 else name)
+	histograms = []
+	if opts.NOBIND:
+		histograms = fetch_plane(name+'.yoda' if name.find(".yoda")<0 else name)
+	else:
+		histograms = fetch(name+'.yoda' if name.find(".yoda")<0 else name)
 
-	fig, axs = plt.subplots(sharex=True)
-	ax = axs
-
+	fig = 0
 	for h in histograms:
+		fig += 1
 		if plotallhistos or h.title.find(opts.SINGLETITLE)>-1:
-			ledges = []
+			centers = []
 			widths = []
 			sumw = []
 			sumw2 = []
-			for b in h.bins:
-				if b.special == "":
-					ledges.append(b.xlow)
-					widths.append(b.xhigh-b.xlow)
-					sumw.append(b.sumw)
-					sumw2.append(b.sumw2)
-			centers = map(lambda x, y: x+ 0.5*y, ledges, widths)
+			for bin in h:
+				centers.append(bin.midpoint)
+				widths.append(bin.width)
+				sumw.append(bin.sumW)
+				sumw2.append(bin.sumW2) 
 			yerr = map(lambda x: math.sqrt(x), sumw2)
 			if opts.LOGY:
-				ax.set_yscale("log")
+				plt.set_yscale("log")
 			if opts.LOGX:
-				ax.set_xscale("log")
+				plt.set_xscale("log")
 			thislegend = Legend(h.title,h.title,"green")
 			if opts.LEGEND!="":
 				leg = readLegend(opts.LEGEND)
@@ -209,9 +218,9 @@ for f in filelist:
 					if l.title==h.title:
 						thislegend=l
 			#ax.errorbar(centers, sumw, yerr=yerr, xerr=widths, fmt='o')
-			ax.hist(centers,bins=len(centers),weights=sumw,normed=opts.NORM,facecolor=thislegend.color,alpha=0.5)
+			plt.figure(fig)
+			plt.hist(centers,bins=len(centers),weights=sumw,normed=opts.NORM,facecolor=thislegend.color,alpha=0.5)
 			plt.title(thislegend.nicename)
-			#plt.xlabel('$\xi$')
-			#plt.ylabel('counts')
+
 	
 	plt.show()
